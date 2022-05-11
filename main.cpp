@@ -37,7 +37,6 @@ class Circuit {
         }
         return n;
     }
-
     MatrixXd admittances() {
         MatrixXd G = MatrixXd::Zero(n, n);
         for (Branch b:branches) {
@@ -53,7 +52,6 @@ class Circuit {
         }
         return G;
     }
-
     MatrixXd volSourcesConnections() {
         MatrixXd B = MatrixXd::Zero(n, m);
         int k = 0;
@@ -68,7 +66,6 @@ class Circuit {
         }
         return B;
     }
-
     MatrixXd currentSources() {
         MatrixXd I = MatrixXd::Zero(n, 1);
         for (Branch b:branches) {
@@ -81,7 +78,6 @@ class Circuit {
         }
         return I;
     }
-
     MatrixXd voltageSources() {
         MatrixXd e = MatrixXd::Zero(m, 1);
         int k = 0;
@@ -95,7 +91,7 @@ class Circuit {
     }
 
 public:
-    Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = 0; }
+    Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = false; }
 
     int getNoOfNodes() const { return noOfNodes; }
     int getRefNode() const { return refNode; }
@@ -103,9 +99,9 @@ public:
     const vector<double> &getNodesVoltages() const { return nodesVoltages; }
     const vector<double> &getVolSourcesCurrents() const { return volSourcesCurrents; }
 
-    void setNoOfNodes(int noOfNodes) { Circuit::noOfNodes = noOfNodes; solved = 0; }
-    void setRefNode(int refNode) { Circuit::refNode = refNode; solved = 0; }
-    void setBranches(const vector<Branch> &branches) { Circuit::branches = branches; solved = 0; }
+    void setNoOfNodes(int noOfNodes) { Circuit::noOfNodes = noOfNodes; solved = false; }
+    void setRefNode(int refNode) { Circuit::refNode = refNode; solved = false; }
+    void setBranches(const vector<Branch> &branches) { Circuit::branches = branches; solved = false; }
 
     void solve() {
         n = noOfNodes - 1, m = noOfVolSources();
@@ -117,9 +113,14 @@ public:
         i = currentSources();
         e = voltageSources();
         b << i, e;
-        x = A.inverse() * b;
 
-        solved = 1;
+        x = A.inverse() * b;
+        MatrixXd v = x.block(0, 0, n, 1), iv = x.block(n, 0, m, 1);
+        vector<double> vecV(v.data(), v.data() + v.size());
+        vector<double> vecIv(iv.data(), iv.data() + iv.size());
+        nodesVoltages = vecV;
+        volSourcesCurrents = vecIv;
+        solved = true;
     }
 };
 
