@@ -6,7 +6,7 @@ using Eigen::MatrixXd;
 using namespace std;
 
 class Branch {
-    int nodeI, nodeJ, branchK, type; // type = 1 for R, type = 2 for E
+    int nodeI, nodeJ, branchK, type; // type = 1 for R, type = 2 for E, type = 3 for I
     double value;
 public:
     Branch(int nodeI, int nodeJ, int branchK, int type, double value) : nodeI(nodeI), nodeJ(nodeJ), branchK(branchK),
@@ -25,7 +25,7 @@ public:
 };
 
 class Circuit {
-    int noOfNodes, refNode;
+    int noOfNodes, refNode, n, m;
     bool solved;
     vector<double> nodesVoltages, volSourcesCurrents;
     vector<Branch> branches;
@@ -37,10 +37,27 @@ class Circuit {
         }
         return n;
     }
-    MatrixXd admittances() { return MatrixXd::Zero(1, 1); }
-    MatrixXd volSourcesConnections() { return MatrixXd::Zero(1, 1); }
-    MatrixXd currentSources() { return MatrixXd::Zero(1, 1); }
-    MatrixXd voltageSources() { return MatrixXd::Zero(1, 1); }
+
+    MatrixXd admittances() {
+        MatrixXd G = MatrixXd::Zero(n, n);
+        for (Branch b:branches) {
+            if (b.getType() != 1) continue;
+            int i = b.getNodeI(), j = b.getNodeJ();
+            cout<<i<<" "<<j<<endl;
+            double v = b.getValue();
+            if (i != 0) {
+                G(i-1, j-1) -= 1/v;
+                G(j-1, i-1) -= 1/v;
+                G(i-1, i-1) += 1/v;
+            }
+            G(j-1, j-1) += 1/v;
+        }
+        return G;
+    }
+
+    MatrixXd volSourcesConnections() { return MatrixXd::Zero(n, m); }
+    MatrixXd currentSources() { return MatrixXd::Zero(n, 1); }
+    MatrixXd voltageSources() { return MatrixXd::Zero(m, 1); }
 
 public:
     Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = 0; }
@@ -56,7 +73,7 @@ public:
     void setBranches(const vector<Branch> &branches) { Circuit::branches = branches; solved = 0; }
 
     void solve() {
-        int n = noOfNodes - 1, m = noOfVolSources();
+        n = noOfNodes - 1, m = noOfVolSources();
         MatrixXd G(n, n), B(n, m), D = MatrixXd::Zero(m, m), A(n+m, n+m), i(n, 1), e(m, 1), z(n+m, 1), x;
         G = admittances();
         B = volSourcesConnections();
