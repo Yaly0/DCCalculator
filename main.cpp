@@ -82,7 +82,17 @@ class Circuit {
         return I;
     }
 
-    MatrixXd voltageSources() { return MatrixXd::Zero(m, 1); }
+    MatrixXd voltageSources() {
+        MatrixXd e = MatrixXd::Zero(m, 1);
+        int k = 0;
+        for (Branch b:branches) {
+            if (b.getType() == 2) {
+                e(k, 0) = b.getValue();
+                k++;
+            }
+        }
+        return e;
+    }
 
 public:
     Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = 0; }
@@ -99,15 +109,15 @@ public:
 
     void solve() {
         n = noOfNodes - 1, m = noOfVolSources();
-        MatrixXd G(n, n), B(n, m), D = MatrixXd::Zero(m, m), A(n+m, n+m), I(n, 1), e(m, 1), z(n+m, 1), x;
+        MatrixXd G(n, n), B(n, m), D = MatrixXd::Zero(m, m), A(n+m, n+m), i(n, 1), e(m, 1), b(n+m, 1), x;
         G = admittances();
         B = volSourcesConnections();
         A << G,             B,
              B.transpose(), D;
-        I = currentSources();
+        i = currentSources();
         e = voltageSources();
-        z << I, e;
-        x = A.inverse() * z;
+        b << i, e;
+        x = A.inverse() * b;
 
         solved = 1;
     }
