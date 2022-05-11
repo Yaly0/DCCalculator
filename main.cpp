@@ -2,6 +2,7 @@
 #include <vector>
 #include <Eigen/Dense>
 
+using Eigen::MatrixXd;
 using namespace std;
 
 class Branch {
@@ -28,6 +29,13 @@ class Circuit {
     bool solved;
     vector<double> nodesVoltages, volSourcesCurrents;
     vector<Branch> branches;
+
+    int noOfVolSources() { return 0; }
+    MatrixXd admittances() { return MatrixXd::Zero(n, n); }
+    MatrixXd volSourcesConnections() { return MatrixXd::Zero(n, m); }
+    MatrixXd currentSources() { return MatrixXd::Zero(n, 1); }
+    MatrixXd voltageSources() { return MatrixXd::Zero(m, 1); }
+
 public:
     Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = 0; }
 
@@ -42,6 +50,16 @@ public:
     void setBranches(const vector<Branch> &branches) { Circuit::branches = branches; solved = 0; }
 
     void solve() {
+        int n = noOfNodes - 1, m = noOfVolSources();
+        MatrixXd G(n, n), B(n, m), D = MatrixXd::Zero(m, m), A(n+m, n+m), i(n, 1), e(m, 1), z(n+m, 1), x;
+        G = admittances();
+        B = volSourcesConnections();
+        A << G,             B,
+             B.transpose(), D;
+        i = currentSources();
+        e = voltageSources();
+        z << i, e;
+        x = A.inverse() * z;
 
         solved = 1;
     }
