@@ -30,11 +30,17 @@ class Circuit {
     vector<double> nodesVoltages, volSourcesCurrents;
     vector<Branch> branches;
 
-    int noOfVolSources() { return 0; }
-    MatrixXd admittances() { return MatrixXd::Zero(n, n); }
-    MatrixXd volSourcesConnections() { return MatrixXd::Zero(n, m); }
-    MatrixXd currentSources() { return MatrixXd::Zero(n, 1); }
-    MatrixXd voltageSources() { return MatrixXd::Zero(m, 1); }
+    int noOfVolSources() {
+        int n = 0;
+        for (Branch b:branches) {
+            if (b.getType() == 2) n++;
+        }
+        return n;
+    }
+    MatrixXd admittances() { return MatrixXd::Zero(1, 1); }
+    MatrixXd volSourcesConnections() { return MatrixXd::Zero(1, 1); }
+    MatrixXd currentSources() { return MatrixXd::Zero(1, 1); }
+    MatrixXd voltageSources() { return MatrixXd::Zero(1, 1); }
 
 public:
     Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = 0; }
