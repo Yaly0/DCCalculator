@@ -43,7 +43,6 @@ class Circuit {
         for (Branch b:branches) {
             if (b.getType() != 1) continue;
             int i = b.getNodeI(), j = b.getNodeJ();
-            cout<<i<<" "<<j<<endl;
             double v = b.getValue();
             if (i != 0) {
                 G(i-1, j-1) -= 1/v;
@@ -55,7 +54,23 @@ class Circuit {
         return G;
     }
 
-    MatrixXd volSourcesConnections() { return MatrixXd::Zero(n, m); }
+    MatrixXd volSourcesConnections() {
+        MatrixXd B = MatrixXd::Zero(n, m);
+        int k = 0;
+        for (Branch b:branches) {
+            if (b.getType() != 2) continue;
+            int i = b.getNodeI(), j = b.getNodeJ(), v = -1;
+            if(b.getValue() > 0) v = 1;
+            if (i == 0) {
+                B(j - 1, k) = v;
+            } else {
+                B(i - 1, k) = -v;
+                B(j - 1, k) = v;
+            }
+            k++;
+        }
+        return B;
+    }
     MatrixXd currentSources() { return MatrixXd::Zero(n, 1); }
     MatrixXd voltageSources() { return MatrixXd::Zero(m, 1); }
 
