@@ -61,17 +61,27 @@ class Circuit {
             if (b.getType() != 2) continue;
             int i = b.getNodeI(), j = b.getNodeJ(), v = -1;
             if(b.getValue() > 0) v = 1;
-            if (i == 0) {
-                B(j - 1, k) = v;
-            } else {
-                B(i - 1, k) = -v;
-                B(j - 1, k) = v;
-            }
+            if (i != 0)
+                B(i-1, k) = -v;
+            B(j-1, k) = v;
             k++;
         }
         return B;
     }
-    MatrixXd currentSources() { return MatrixXd::Zero(n, 1); }
+
+    MatrixXd currentSources() {
+        MatrixXd I = MatrixXd::Zero(n, 1);
+        for (Branch b:branches) {
+            if (b.getType() != 3) continue;
+            int i = b.getNodeI(), j = b.getNodeJ();
+            double v = b.getValue();
+            if (i != 0)
+                I(i-1, 0) -= v;
+            I(j-1, 0) += v;
+        }
+        return I;
+    }
+
     MatrixXd voltageSources() { return MatrixXd::Zero(m, 1); }
 
 public:
@@ -89,14 +99,14 @@ public:
 
     void solve() {
         n = noOfNodes - 1, m = noOfVolSources();
-        MatrixXd G(n, n), B(n, m), D = MatrixXd::Zero(m, m), A(n+m, n+m), i(n, 1), e(m, 1), z(n+m, 1), x;
+        MatrixXd G(n, n), B(n, m), D = MatrixXd::Zero(m, m), A(n+m, n+m), I(n, 1), e(m, 1), z(n+m, 1), x;
         G = admittances();
         B = volSourcesConnections();
         A << G,             B,
              B.transpose(), D;
-        i = currentSources();
+        I = currentSources();
         e = voltageSources();
-        z << i, e;
+        z << I, e;
         x = A.inverse() * z;
 
         solved = 1;
