@@ -42,6 +42,8 @@ class Circuit {
         for (Branch b:branches) {
             if (b.getType() != 1) continue;
             int i = b.getNodeI(), j = b.getNodeJ();
+            j = (j < refNode) ? j : j - 1;
+            i = (i < refNode) ? i : i - 1;
             double v = b.getValue();
             if (i != 0) {
                 G(i-1, j-1) -= 1/v;
@@ -58,6 +60,8 @@ class Circuit {
         for (Branch b:branches) {
             if (b.getType() != 2) continue;
             int i = b.getNodeI(), j = b.getNodeJ(), v = -1;
+            j = (j < refNode) ? j : j - 1;
+            i = (i < refNode) ? i : i - 1;
             if(b.getValue() > 0) v = 1;
             if (i != 0)
                 B(i-1, k) = -v;
@@ -71,6 +75,8 @@ class Circuit {
         for (Branch b:branches) {
             if (b.getType() != 3) continue;
             int i = b.getNodeI(), j = b.getNodeJ();
+            j = (j < refNode) ? j : j - 1;
+            i = (i < refNode) ? i : i - 1;
             double v = b.getValue();
             if (i != 0)
                 I(i-1, 0) -= v;
@@ -83,7 +89,7 @@ class Circuit {
         int k = 0;
         for (Branch b:branches) {
             if (b.getType() == 2) {
-                e(k, 0) = b.getValue();
+                e(k, 0) = abs(b.getValue());
                 k++;
             }
         }
@@ -91,7 +97,7 @@ class Circuit {
     }
 
 public:
-    Circuit(int noOfNodes, int refNode) : noOfNodes(noOfNodes), refNode(refNode) { solved = false; }
+    Circuit(int noOfNodes) : noOfNodes(noOfNodes) { solved = false; }
 
     int getNoOfNodes() const { return noOfNodes; }
     int getRefNode() const { return refNode; }
@@ -100,7 +106,20 @@ public:
     const vector<double> &getVolSourcesCurrents() const { return volSourcesCurrents; }
 
     void setNoOfNodes(int noOfNodes) { Circuit::noOfNodes = noOfNodes; solved = false; }
-    void setRefNode(int refNode) { Circuit::refNode = refNode; solved = false; }
+    void setRefNode(int refNode) {
+        if(refNode < 1 || refNode > noOfNodes) throw "Reference node out of boundaries";
+        Circuit::refNode = refNode;
+        for (int i(0); i < branches.size(); i++) {
+            if (branches[i].getNodeI() == refNode) {
+                branches[i].setNodeI(0);
+            } else if (branches[i].getNodeJ() == refNode) {
+                branches[i].setNodeJ(branches[i].getNodeI());
+                branches[i].setNodeI(0);
+                if(branches[i].getType() != 1) branches[i].setValue(-branches[i].getValue());
+            }
+        }
+        solved = false;
+    }
     void setBranches(const vector<Branch> &branches) { Circuit::branches = branches; solved = false; }
 
     void solve() {
@@ -115,10 +134,11 @@ public:
         b << i, e;
 
         x = A.inverse() * b;
-        MatrixXd v = x.block(0, 0, n, 1), iv = x.block(n, 0, m, 1);
-        vector<double> vecV(v.data(), v.data() + v.size());
+        MatrixXd vn(noOfNodes, 1), iv = x.block(n, 0, m, 1);
+        vn << x.block(0, 0, refNode-1, 1), 0, x.block(refNode, 0, noOfNodes-refNode, 1); // inserting 0 at refNode index
+        vector<double> vecVn(vn.data(), vn.data() + vn.size());
         vector<double> vecIv(iv.data(), iv.data() + iv.size());
-        nodesVoltages = vecV;
+        nodesVoltages = vecVn;
         volSourcesCurrents = vecIv;
         solved = true;
     }
