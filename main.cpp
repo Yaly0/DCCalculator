@@ -49,7 +49,7 @@ class Circuit {
     int noOfNodes, refNode, n, m;
     bool solved;
     vector<double> nodesVoltages, volSourcesCurrents;
-    vector<Branch> branches;
+    vector<Branch> branches, noRefBranches;
 
     int noOfVolSources() {
         int n = 0;
@@ -117,6 +117,22 @@ class Circuit {
         return e;
     }
 
+    void countK(vector<Branch> &vecB) {
+        for (int x(0); x < vecB.size(); x++) {
+            int nodeIx = vecB[x].getNodeI(), nodeJx = vecB[x].getNodeJ();
+            int k = 1;
+            bool a = false;
+            for (int y(x + 1); y < vecB.size(); y++) {
+                int nodeIy = vecB[y].getNodeI(), nodeJy = vecB[y].getNodeJ();
+                if(nodeIx == nodeIy && nodeJx == nodeJy && vecB[y].getBranchK() == 0) {
+                    vecB[y].setBranchK(++k);
+                    a = true;
+                }
+            }
+            if(a) vecB[x].setBranchK(1);
+        }
+    }
+
 public:
     Circuit(int noOfNodes) : noOfNodes(noOfNodes) { solved = false; }
 
@@ -159,14 +175,14 @@ public:
         for (int k(0); k < types.size(); k++) {
             if(types[k] != "w") {
                 string compI = is[k], compJ = js[k];
-                if(compI.find(",") != string::npos) {
+                if(compI.find(',') != string::npos) {
                     for (int l(0); l < types.size(); l++) {
                         if(is[l] == compI) is[l] = to_string(num);
                         if(js[l] == compI) js[l] = to_string(num);
                     }
                     num++;
                 }
-                if(compJ.find(",") != string::npos) {
+                if(compJ.find(',') != string::npos) {
                     for (int l(0); l < types.size(); l++) {
                         if(is[l] == compJ) is[l] = to_string(num);
                         if(js[l] == compJ) js[l] = to_string(num);
@@ -189,10 +205,11 @@ public:
                 j = temp;
                 if(type != 1) value = -value;
             }
-            Branch branch(i, j, 1, type, value);
+            Branch branch(i, j, 0, type, value);
             vecB.push_back(branch);
         }
         noOfNodes = num - 1;
+        countK(vecB);
         setBranches(vecB);
         solved = false;
     }
@@ -218,7 +235,11 @@ public:
         }
         solved = false;
     }
-    void setBranches(const vector<Branch> &branches) { Circuit::branches = branches; solved = false; }
+    void setBranches(const vector<Branch> &branches) {
+        Circuit::branches = branches;
+        noRefBranches = branches;
+        solved = false;
+    }
 
     void solve() {
         n = noOfNodes - 1, m = noOfVolSources();
@@ -239,6 +260,33 @@ public:
         nodesVoltages = vecVn;
         volSourcesCurrents = vecIv;
         solved = true;
+    }
+    vector<double> getBranchesCurrents() {
+        if(!solved) throw "Cicuit is not solved yet";
+        vector<double> currents;
+        int vx = 0;
+        for (Branch b:noRefBranches) {
+            if (b.getType() == 3)
+                currents.push_back(b.getValue());
+            else if (b.getType() == 2) {
+                if(b.getValue() > 0) currents.push_back(-volSourcesCurrents[vx++]);
+                else                 currents.push_back(volSourcesCurrents[vx++]);
+            }
+            else if (b.getType() == 1) {
+                double vi = nodesVoltages[b.getNodeI() - 1], vj = nodesVoltages[b.getNodeJ() - 1];
+                currents.push_back((vi - vj) / b.getValue());
+            }
+        }
+        return currents;
+    }
+    void printBranchesCurrents() {
+        if(!solved) throw "Circuit is not solved yet";
+        vector<double> currents = getBranchesCurrents();
+        for (int k(0); k < currents.size(); k++) {
+            cout << "I_" << noRefBranches[k].getNodeI() << "_" << noRefBranches[k].getNodeJ();
+            if (noRefBranches[k].getBranchK() != 0) cout << "_" << noRefBranches[k].getBranchK();
+            cout << " = " << ceil(currents[k] * 100000.0) / 100.0 << "mA" <<endl;
+        }
     }
 };
 
