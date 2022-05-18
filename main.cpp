@@ -1,9 +1,30 @@
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <Eigen/Dense>
 
 using Eigen::MatrixXd;
 using namespace std;
+
+vector<string> readFile(string fileName) {
+    vector<string> lines;
+    fstream myfile (fileName);
+    string line;
+    while (getline(myfile, line))
+        lines.push_back(line);
+    myfile.close();
+    lines.erase(lines.begin());
+    return lines;
+}
+
+vector<string> split(const string &s, char delim) {
+    stringstream ss(s);
+    string item;
+    vector<string> elems;
+    while (getline(ss, item, delim))
+        elems.push_back(item);
+    return elems;
+}
 
 class Branch {
     int nodeI, nodeJ, branchK, type; // type = 1 for R, type = 2 for E, type = 3 for I
@@ -99,6 +120,83 @@ class Circuit {
 public:
     Circuit(int noOfNodes) : noOfNodes(noOfNodes) { solved = false; }
 
+    Circuit(string fileName) {
+        vector<string> lines = readFile(fileName), types, values, is, js;
+        vector<Branch> vecB;
+        int num = 1;
+
+        // filling vectors "types", "values", "is" and "js"
+        for(string s:lines) {
+            vector<string> parts = split(s, ' ');
+            if(s == "" || (parts[0] != "r" && parts[0] != "v" && parts[0] != "i" && parts[0] != "w")) continue;
+            types.push_back(parts[0]);
+            is.push_back(parts[1] + "," + parts[2]);
+            js.push_back(parts[3] + "," + parts[4]);
+            string value = (parts[0] == "v") ? parts[8] : parts[parts.size() - 1];
+            values.push_back(value);
+        }
+        // making one point for same potential
+        for (int k(0); k < lines.size(); k++) {
+            if(types[k] == "w") {
+                for (int l(0); l < lines.size(); l++) {
+                    string wireI = is[k];
+                    if(is[l] == wireI) is[l] = js[k];
+                    if(js[l] == wireI) js[l] = js[k];
+                }
+            }
+        }
+        // erasing wires
+        for (int k(0); k < types.size(); k++) {
+            if(types[k] == "w") {
+                types.erase(types.begin() + k);
+                is.erase(is.begin() + k);
+                js.erase(js.begin() + k);
+                values.erase(values.begin() + k);
+                k--;
+            }
+        }
+        // replacing positions with numbers beginning from 1
+        for (int k(0); k < types.size(); k++) {
+            if(types[k] != "w") {
+                string compI = is[k], compJ = js[k];
+                if(compI.find(",") != string::npos) {
+                    for (int l(0); l < types.size(); l++) {
+                        if(is[l] == compI) is[l] = to_string(num);
+                        if(js[l] == compI) js[l] = to_string(num);
+                    }
+                    num++;
+                }
+                if(compJ.find(",") != string::npos) {
+                    for (int l(0); l < types.size(); l++) {
+                        if(is[l] == compJ) is[l] = to_string(num);
+                        if(js[l] == compJ) js[l] = to_string(num);
+                    }
+                    num++;
+                }
+            }
+        }
+        for (int k(0); k < types.size(); k++) {
+            int type, i, j;
+            double value;
+            type = (types[k] == "r") ? 1 : ((types[k] == "v") ? 2 : 3);
+            i = stoi(is[k]);
+            j = stoi(js[k]);
+            value = stod(values[k]);
+
+            if(i > j) {
+                int temp = i;
+                i = j;
+                j = temp;
+                if(type != 1) value = -value;
+            }
+            Branch branch(i, j, 1, type, value);
+            vecB.push_back(branch);
+        }
+        noOfNodes = num - 1;
+        setBranches(vecB);
+        solved = false;
+    }
+
     int getNoOfNodes() const { return noOfNodes; }
     int getRefNode() const { return refNode; }
     const vector<Branch> &getBranches() const { return branches; }
@@ -135,7 +233,7 @@ public:
 
         x = A.inverse() * b;
         MatrixXd vn(noOfNodes, 1), iv = x.block(n, 0, m, 1);
-        vn << x.block(0, 0, refNode-1, 1), 0, x.block(refNode, 0, noOfNodes-refNode, 1); // inserting 0 at refNode index
+        vn << x.block(0, 0, refNode-1, 1), 0, x.block(refNode-1, 0, noOfNodes-refNode, 1); // inserting 0 at refNode index
         vector<double> vecVn(vn.data(), vn.data() + vn.size());
         vector<double> vecIv(iv.data(), iv.data() + iv.size());
         nodesVoltages = vecVn;
