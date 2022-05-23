@@ -285,10 +285,56 @@ public:
         for (int k(0); k < currents.size(); k++) {
             cout << "I_" << noRefBranches[k].getNodeI() << "_" << noRefBranches[k].getNodeJ();
             if (noRefBranches[k].getBranchK() != 0) cout << "_" << noRefBranches[k].getBranchK();
-            cout << " = " << ceil(currents[k] * 100000.0) / 100.0 << "mA" <<endl;
+            printf(" = %.3lfmA \n", currents[k] * 1000);
         }
     }
 };
 
+void program() {
+    cout << "\n--------------------------------------------------------------\n"
+            "DCCalculator - Aplikacija za proračun DC mreže korištenjem MNČ\n"
+            "--------------------------------------------------------------\n\n"
+            "Prvo se unese broj čvorova (dijelovi  mreže  koji  nemaju isti\n"
+            "potencijal), onda  se unese broj grana između svaka dva čvora,\n"
+            "nakon toga  se unese šta svaka grana sadrži i vrijednost toga,\n"
+            "te unese se broj referentnog čvora.\n"
+            "Kliknite enter za nastavak...";
+    cin.ignore();
+    int n, m, k, kTemp, type, refNode;
+    double value;
+    vector<Branch> branches;
+    cout << "\nBroj čvorova u mreži: ";
+    cin >> n;
+    for(int i(1); i <= n - 1; i++) {
+        for(int j(i + 1); j <= n; j++) {
+            cout << "\nBroj grana između " << i << ". i " << j << ". čvor (0 ako nisu povezani): ";
+            cin >> m;
+            for(int k(1); k <= m; k++) {
+                if(m == 1)  cout << "Grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3): ";
+                else cout << k << ". grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3): ";
+                cin >> type;
+                if (type == 2) cout << "Vrijednosti naponskog izvora (pomnožiti sa -1 ako je + na strani čvora " << i <<"): ";
+                else if (type == 3) cout << "Vrijednosti strujnog izvora (pomnožiti sa -1 ako strelica ide ka čvoru " << i <<"): ";
+                else cout << "Vrijednosti otpornika: ";
+                cin >> value;
+                if(m == 1) kTemp = 0;
+                else kTemp = k;
+                Branch branch(i,j,kTemp,type,value);
+                branches.push_back(branch);
+            }
+        }
+    }
+    cout << "\nReferentni čvor: ";
+    cin >> refNode;
+    cout<<endl;
+
+    Circuit cir(n);
+    cir.setBranches(branches);
+    cir.setRefNode(refNode);
+    cir.solve();
+    cir.printBranchesCurrents();
+}
+
 int main() {
+    program();
 }
