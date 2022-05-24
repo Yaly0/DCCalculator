@@ -13,7 +13,6 @@ vector<string> readFile(string fileName) {
     while (getline(myfile, line))
         lines.push_back(line);
     myfile.close();
-    lines.erase(lines.begin());
     return lines;
 }
 
@@ -291,25 +290,44 @@ public:
 };
 
 void program() {
+    int choice;
     cout << "\n--------------------------------------------------------------\n"
             "DCCalculator - Aplikacija za proračun DC mreže korištenjem MNČ\n"
             "--------------------------------------------------------------\n\n"
-            "Prvo se unese broj čvorova (dijelovi  mreže  koji  nemaju isti\n"
+            "1 - Unos preko programa (grana po grani sa vrijednostima)\n"
+            "2 - Unos preko Falstad simulatora  (nakon crtanje mreže i\n"
+            "    postavljanje komponenti, Export As Text...)\n\n"
+            "Vaš izbor: ";
+    cin >> choice;
+    cout << endl;
+    if(choice == 2) {
+        cout << "Mrežu postavite u \"falstad.txt\" datoteku  (u cmake-build-debug\n"
+                "folderu) i kliknite enter za nastavak...";
+        cin.ignore();
+        cin.ignore();
+        cout << endl;
+        Circuit cir("falstad.txt");
+        cir.setRefNode(1);
+        cir.solve();
+        cir.printBranchesCurrents();
+        return;
+    }
+    cout << "Prvo se unese broj čvorova (dijelovi  mreže  koji  nemaju isti\n"
             "potencijal), onda  se unese broj grana između svaka dva čvora,\n"
-            "nakon toga  se unese šta svaka grana sadrži i vrijednost toga,\n"
-            "te unese se broj referentnog čvora.\n"
+            "nakon toga  se unese šta svaka grana sadrži i vrijednost toga.\n"
             "Kliknite enter za nastavak...";
     cin.ignore();
-    int n, m, k, kTemp, type, refNode;
+    cin.ignore();
+    int n, m, kTemp, type, refNode;
     double value;
     vector<Branch> branches;
     cout << "\nBroj čvorova u mreži: ";
     cin >> n;
-    for(int i(1); i <= n - 1; i++) {
-        for(int j(i + 1); j <= n; j++) {
+    for (int i(1); i <= n - 1; i++) {
+        for (int j(i + 1); j <= n; j++) {
             cout << "\nBroj grana između " << i << ". i " << j << ". čvor (0 ako nisu povezani): ";
             cin >> m;
-            for(int k(1); k <= m; k++) {
+            for (int k(1); k <= m; k++) {
                 if(m == 1)  cout << "Grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3): ";
                 else cout << k << ". grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3): ";
                 cin >> type;
@@ -324,9 +342,10 @@ void program() {
             }
         }
     }
-    cout << "\nReferentni čvor: ";
-    cin >> refNode;
-    cout<<endl;
+//    cout << "\nReferentni čvor: ";
+//    cin >> refNode;
+    refNode = 1;
+    cout << endl;
 
     Circuit cir(n);
     cir.setBranches(branches);
