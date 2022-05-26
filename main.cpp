@@ -26,7 +26,8 @@ vector<string> split(const string &s, char delim) {
 }
 
 class Branch {
-    int nodeI, nodeJ, branchK, type; // type = 1 for R, type = 2 for E, type = 3 for I, type = 4 for Uv
+    int nodeI, nodeJ, branchK, type;
+    // type = 1 for R, 2 - E, 3 - I, 4 - Uv, 5 - Ia, 6 - calculated Ia
     double value;
 public:
     Branch(int nodeI, int nodeJ, int branchK, int type, double value) : nodeI(nodeI), nodeJ(nodeJ), branchK(branchK),
@@ -43,6 +44,19 @@ public:
     void setType(int type) { Branch::type = type; }
     void setValue(double value) { Branch::value = value; }
 };
+
+void appendToFile(string fileName, Branch b) {
+    ofstream file(fileName, ios::app);
+    int t = b.getType(), i = b.getNodeI(), j = b.getNodeJ();
+    string type;
+    if( t == 1) type = "r"; else if( t == 2) type = "v"; else if( t == 3) type = "i";
+    else if( t == 4) type = "p"; else if( t == 5) type = "370";
+    if (type == "v")
+        file << type << " " << i << " "<< i << " "<< j << " " << j << " 0 0 0 " << b.getValue() << "\n";
+    else
+        file << type << " " << i << " "<< i << " "<< j << " " << j << " " << b.getValue() << "\n";
+    file.close();
+}
 
 class Circuit {
     int noOfNodes, refNode, n, m;
@@ -65,11 +79,17 @@ class Circuit {
             j = (j < refNode) ? j : j - 1;
             i = (i < refNode) ? i : i - 1;
             double v = b.getValue();
-            if (i != 0) {
-                G(i-1, j-1) -= 1/v;
-                G(j-1, i-1) -= 1/v;
-                G(i-1, i-1) += 1/v;
+            if (i == 0) {
+                G(j-1, j-1) += 1/v;
+                continue;
             }
+            if (j == 0) {
+                G(i-1, i-1) += 1/v;
+                continue;
+            }
+            G(i-1, j-1) -= 1/v;
+            G(j-1, i-1) -= 1/v;
+            G(i-1, i-1) += 1/v;
             G(j-1, j-1) += 1/v;
         }
         return G;
@@ -83,9 +103,8 @@ class Circuit {
             j = (j < refNode) ? j : j - 1;
             i = (i < refNode) ? i : i - 1;
             if(b.getValue() > 0) v = 1;
-            if (i != 0)
-                B(i-1, k) = -v;
-            B(j-1, k) = v;
+            if (i != 0) B(i-1, k) = -v;
+            if (j != 0) B(j-1, k) = v;
             k++;
         }
         return B;
@@ -98,9 +117,8 @@ class Circuit {
             j = (j < refNode) ? j : j - 1;
             i = (i < refNode) ? i : i - 1;
             double v = b.getValue();
-            if (i != 0)
-                I(i-1, 0) -= v;
-            I(j-1, 0) += v;
+            if (i != 0) I(i-1, 0) -= v;
+            if (j != 0) I(j-1, 0) += v;
         }
         return I;
     }
@@ -131,11 +149,7 @@ class Circuit {
             if(a) vecB[x].setBranchK(1);
         }
     }
-
-public:
-    Circuit(int noOfNodes) : noOfNodes(noOfNodes) { solved = false; }
-
-    Circuit(string fileName) {
+    vector<Branch> branchesFromTxt(string fileName, bool withAmmeters) {
         vector<string> lines = readFile(fileName), types, values, is, js;
         vector<Branch> vecB;
         int num = 1;
@@ -144,16 +158,19 @@ public:
         for(string s:lines) {
             vector<string> parts = split(s, ' ');
             if(s == "" || (parts[0] != "r" && parts[0] != "v" && parts[0] != "i" &&
-                           parts[0] != "w" && parts[0] != "p")) continue;
+                           parts[0] != "w" && parts[0] != "p" && parts[0] != "370")) continue;
             types.push_back(parts[0]);
             is.push_back(parts[1] + "," + parts[2]);
             js.push_back(parts[3] + "," + parts[4]);
             string value = (parts[0] == "v") ? parts[8] : parts[parts.size() - 1];
             values.push_back(value);
         }
+        string ammeter = "370";
+        if(withAmmeters) ammeter = "skip";
+
         // making one point for same potential
         for (int k(0); k < types.size(); k++) {
-            if(types[k] == "w") {
+            if(types[k] == "w" || types[k] == ammeter) {
                 string wireI = is[k], wireJ = js[k];
                 for (int l(0); l < types.size(); l++) {
                     if(is[l] == wireI) is[l] = wireJ;
@@ -161,9 +178,10 @@ public:
                 }
             }
         }
+        if(withAmmeters) ammeter = "p";
         // erasing wires
         for (int k(0); k < types.size(); k++) {
-            if(types[k] == "w") {
+            if(types[k] == "w" || types[k] == ammeter) {
                 types.erase(types.begin() + k);
                 is.erase(is.begin() + k);
                 js.erase(js.begin() + k);
@@ -196,22 +214,25 @@ public:
             else if (types[k] == "v") type = 2; // Voltage source
             else if (types[k] == "i") type = 3; // Current source
             else if (types[k] == "p") type = 4; // Voltmeter
+            else if (types[k] == "370") type = 5; // Ammeter
+            else throw "mistake";
 
             i = stoi(is[k]);
             j = stoi(js[k]);
             value = stod(values[k]);
-
-            if(i > j && type != 4) {
-                int temp = i;
-                i = j;
-                j = temp;
-                if(type != 1) value = -value;
-            }
             Branch branch(i, j, 0, type, value);
             vecB.push_back(branch);
         }
         noOfNodes = num - 1;
         countK(vecB);
+        return vecB;
+    }
+
+public:
+    Circuit(int noOfNodes) : noOfNodes(noOfNodes) { solved = false; }
+
+    Circuit(string fileName) {
+        vector<Branch> vecB = branchesFromTxt(fileName, false);
         setBranches(vecB);
         solved = false;
     }
@@ -240,7 +261,6 @@ public:
     void setBranches(const vector<Branch> &branches) {
         Circuit::branches = branches;
         noRefBranches = branches;
-        solved = false;
     }
 
     void solve() {
@@ -286,6 +306,7 @@ public:
         vector<double> currents = getBranchesCurrents();
         if (currents.size() != 0) cout << "\nCurrents:\n";
         for (int k(0); k < currents.size(); k++) {
+            if(noRefBranches[k].getType() > 3) continue;
             cout << "I_" << noRefBranches[k].getNodeI() << "_" << noRefBranches[k].getNodeJ();
             if (noRefBranches[k].getBranchK() != 0) cout << "_" << noRefBranches[k].getBranchK();
             printf(" = %.3lfmA\n", currents[k] * 1000);
@@ -307,9 +328,110 @@ public:
             printf(" = %.3lfV\n", voltmeters[k]);
         }
     }
+    void printAmmeters() {
+        if(!solved) throw "Circuit is not solved yet";
+        vector<Branch> newBranches = branchesFromTxt("falstad.txt", true);
+        vector<double> currents = getBranchesCurrents();
+        for(int k(0); k < newBranches.size(); k++) {
+            if(newBranches[k].getType() == 5) currents.insert(currents.begin() + k, 0);
+        }
+        cout<<endl;
+        int connections, index, sign, ki, kj, li, lj;
+        for(int k(0); k < newBranches.size(); k++) { // Ammeters in series with other components
+            ki = newBranches[k].getNodeI();
+            kj = newBranches[k].getNodeJ();
+            if(newBranches[k].getType() == 5) {
+                sign = 1;
+                connections = 0;
+                for(int l(0); l < newBranches.size(); l++) {
+                    li = newBranches[l].getNodeI();
+                    lj = newBranches[l].getNodeJ();
+                    if (k != l && (li == ki || lj == ki)) {
+                        if(li == ki) sign = -1;
+                        connections++;
+                        index = l;
+                    }
+                }
+                if(connections == 1) {
+                    currents[k] = sign * currents[index];
+                    newBranches[k].setType(6);
+                    continue;
+                }
+                sign = 1;
+                connections = 0;
+                for(int l(0); l < newBranches.size(); l++) {
+                    li = newBranches[l].getNodeI();
+                    lj = newBranches[l].getNodeJ();
+                    if (k != l && (li == kj || lj == kj)) {
+                        if(lj == kj) sign = -1;
+                        connections++;
+                        index = l;
+                    }
+                }
+                if(connections == 1) {
+                    currents[k] = sign * currents[index];
+                    newBranches[k].setType(6);
+                    continue;
+                }
+            }
+        }
+        double current;
+        for(int k(0); k < newBranches.size(); k++) { // Ammeters alone in a wire
+            ki = newBranches[k].getNodeI();
+            kj = newBranches[k].getNodeJ();
+            if(newBranches[k].getType() == 5) {
+                current = 0;
+                for(int l(0); l < newBranches.size(); l++) {
+                    li = newBranches[l].getNodeI();
+                    lj = newBranches[l].getNodeJ();
+                    if (k != l && (li == ki || lj == ki)) {
+                        if(newBranches[l].getType() == 5) goto nodeJ;
+                        if(li == ki) current -= currents[l];
+                        else current += currents[l];
+                    }
+                }
+                currents[k] = current;
+                newBranches[k].setType(6);
+                continue;
+                nodeJ:
+                current = 0;
+                for(int l(0); l < newBranches.size(); l++) {
+                    li = newBranches[l].getNodeI();
+                    lj = newBranches[l].getNodeJ();
+                    if (k != l && (li == kj || lj == kj)) {
+                        if(newBranches[l].getType() == 5) goto next;
+                        if(lj == kj) current += currents[l];
+                        else current -= currents[l];
+                    }
+                }
+                currents[k] = current;
+                newBranches[k].setType(6);
+                next:;
+            }
+        }
+
+
+        if(newBranches.size() > branches.size()) {
+            for (int k(0); k < currents.size(); k++) {
+                if(newBranches[k].getType() > 3) continue;
+                cout << "I_" << newBranches[k].getNodeI() << "_" << newBranches[k].getNodeJ();
+                if (newBranches[k].getBranchK() != 0) cout << "_" << newBranches[k].getBranchK();
+                printf(" = %.3lfmA\n", currents[k] * 1000);
+            }
+            cout<<"\nAmmeters:\n";
+        } else
+            printBranchesCurrents();
+        int i = 1;
+        for (int k(0); k < currents.size(); k++) {
+            if(newBranches[k].getType() == 6) {
+                cout << "Ia_" << i++;
+                printf(" = %.3lfmA\n", currents[k] * 1000);
+            }
+        }
+    }
     void printSolution() {
         if(!solved) throw "Circuit is not solved yet";
-        printBranchesCurrents();
+        printAmmeters();
         printVoltmeters();
     }
 };
@@ -337,6 +459,7 @@ void program() {
         cir.printSolution();
         return;
     }
+    ofstream file("falstad.txt");
     cout << "Prvo se unese broj čvorova (dijelovi  mreže  koji  nemaju isti\n"
             "potencijal), onda  se unese broj grana između svaka dva čvora,\n"
             "nakon toga  se unese šta svaka grana sadrži i vrijednost toga.\n"
@@ -353,34 +476,32 @@ void program() {
             cout << "\nBroj grana između " << i << ". i " << j << ". čvor (0 ako nisu povezani): ";
             cin >> m;
             for (int k(1); k <= m; k++) {
-                if(m == 1)  cout << "Grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3, Uv - 4): ";
-                else cout << k << ". grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3, Uv - 4): ";
+                if(m == 1)  cout << "Grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3, Uv - 4, Ia - 5): ";
+                else cout << k << ". grana između " << i << ". i " << j << ". čvor sadrži (R - 1, E - 2, Is - 3, Uv - 4, Ia - 5): ";
                 cin >> type;
                 if      (type == 1) cout << "Vrijednosti otpornika: ";
                 else if (type == 2) cout << "Vrijednosti naponskog izvora (pomnožiti sa -1 ako je + na strani čvora " << i <<"): ";
                 else if (type == 3) cout << "Vrijednosti strujnog izvora (pomnožiti sa -1 ako strelica ide ka čvoru " << i <<"): ";
                 else if (type == 4) cout << "Ako je plus strana voltmetra kod čvora " << j << " unesite -1, inače 1: ";
+                else if (type == 5) cout << "Ako strelica ide ka čvoru " << i << " unesite -1, inače 1: ";
                 cin >> value;
                 iTemp = i;
                 jTemp = j;
-                if(type == 4 && value == -1) {
+                if((type == 4 || type == 5) && value == -1) {
                     jTemp = i;
                     iTemp = j;
                 }
                 if(m == 1) kTemp = 0;
                 else kTemp = k;
                 Branch branch(iTemp,jTemp,kTemp,type,value);
-                branches.push_back(branch);
+                appendToFile("falstad.txt", branch);
             }
         }
     }
 //    cout << "\nReferentni čvor: ";
 //    cin >> refNode;
     refNode = 1;
-    cout << endl;
-
-    Circuit cir(n);
-    cir.setBranches(branches);
+    Circuit cir("falstad.txt");
     cir.setRefNode(refNode);
     cir.solve();
     cir.printSolution();
